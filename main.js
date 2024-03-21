@@ -61,8 +61,8 @@ export default class Sketch{
     this.camera.position.z = 1;
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     Promise.all([
-      this.getPixelDataFromTexture("/gpgpu-morphing-graph/" + logoImgPath), 
-      this.getPixelDataFromTexture("/gpgpu-morphing-graph/" +superImgPath)]).
+      this.getPixelDataFromTexture(logoImgPath), 
+      this.getPixelDataFromTexture(superImgPath)]).
       then((textures)=>{
         console.log(textures);
       this.texture_three = textures[0];
