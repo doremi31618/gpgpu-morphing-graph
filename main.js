@@ -7,6 +7,30 @@ import fragmentShader from './shaders/fragment.glsl';
 import fboVertex from './shaders/fboVertex.glsl';
 import fboFragment from './shaders/fboFragment.glsl';
 
+import logoImgPath from '/logo.png';
+import superImgPath from '/super.png';
+
+import GUI from 'lil-gui'; 
+
+const gui = new GUI();
+
+
+async function loadImage(path){
+  return new Promise((resolve, reject)=>{
+    let img = new Image();
+
+    img.src = path;
+    img.crossOrigin = 'Anonymous';
+    img.onload = ()=>{
+      resolve(img);
+    }
+    img.onerror = (e)=>{
+      reject(e);
+    }
+  })
+  
+  
+}
 
 
 export default class Sketch{
@@ -15,9 +39,14 @@ export default class Sketch{
     this.width = this.container.offsetWidth;
     this.height = this.container.offsetHeight;
 
+    this.size = 128;
+    this.number = this.size * this.size;
+
+
     this.scene = new THREE.Scene();
     this.raycaster = new THREE.Raycaster();
     this.pointer = new THREE.Vector2();
+    this.uiObject = {timeControl : 1};
 
     //init renderer
     this.renderer = new THREE.WebGLRenderer({
@@ -31,13 +60,77 @@ export default class Sketch{
     this.camera = new THREE.PerspectiveCamera(70, this.width/this.height, 0.01, 10);
     this.camera.position.z = 1;
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    Promise.all([
+      this.getPixelDataFromTexture(logoImgPath), 
+      this.getPixelDataFromTexture(superImgPath)]).
+      then((textures)=>{
+        console.log(textures);
+      this.texture_three = textures[0];
+      this.texture_super = textures[1];
+
+      this.createPositionBuffer();
+      this.setupMouseEvent()
+      this.addObject();
+      this.setupFBO();//setting up compute shader 
+      this.setupResize();
+      this.render();
+    })
     
-    this.createPositionBuffer();
-    this.setupMouseEvent()
-    this.addObject();
-    this.setupFBO();//setting up compute shader 
-    this.setupResize();
-    this.render();
+  }
+  getPixelDataFromTexture(url){
+    return new Promise(async (resolve, reject)=>{
+      let image = await loadImage(url);
+    let width = 256
+    // logoImage.size = width;
+    // console.log(logoImage)
+
+    let canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = width;
+    let ctx = canvas.getContext('2d');
+    ctx.drawImage(image, 0, 0, width, width);
+    let data = ctx.getImageData(0,0,width,width).data;
+    // console.log(data)
+    let pixels = [];
+
+    for(let i=0; i<data.length; i+=4){
+      if (data[i] > 5) continue;
+      let x = (i/4) % width;
+      let y = -Math.floor((i/4) /width);
+      pixels.push({x: x/width-0.5, y:y/width + 0.5});
+    }
+    
+
+    // let logoCanvas = document.create
+    this.size = 500;
+    this.number = this.size * this.size;
+
+    this.positions = new Float32Array(this.number * 4);
+    for(let i=0; i<this.size; i++){
+      for(let j=0; j<this.size; j++){
+        let index = i * this.size + j;
+        let randomIndex = Math.floor(Math.random() * (pixels.length-1))
+        let randomPosition = pixels[randomIndex]
+        if (Math.random()>0.9){
+          randomPosition = {x: (Math.random()-0.5) * 2, y:(Math.random()-0.5)*2}
+        }
+        // console.log(randomPosition, randomIndex)
+        this.positions[index * 4 ] = randomPosition.x + Math.random() * 0.01;
+        this.positions[index * 4 + 1] = randomPosition.y+ Math.random() * 0.01;
+        // console.log(this.positions[index * 4 ], this.positions[index * 4 + 1] )
+        // this.positions[index * 4 ] = i/(this.size-1) - 0.5;
+        // this.positions[index * 4 + 1] = j/(this.size-1) -0.5;
+        this.positions[index * 4 + 2] = 0;
+        this.positions[index * 4 + 3] = 1;
+      }
+    }
+    // console.log(this.positions)
+    let positionTexture = new THREE.DataTexture(this.positions,this.size, this.size, THREE.RGBAFormat, THREE.FloatType);
+    positionTexture.needsUpdate = true;
+
+    resolve(positionTexture);
+    })
+    
   }
   setupMouseEvent(){
     this.uMousePos = new THREE.Vector3(0,0,0);
@@ -60,19 +153,26 @@ export default class Sketch{
     })
   }
   createPositionBuffer(){
-    this.size = 32;
-    this.number = this.size * this.size;
+    // await this.getPixelDataFromTexture(logoImgPath);
+    // let pixelData = [{x:0.5, y:0.5}];
+
+    
 
     this.positions = new Float32Array(this.number * 4);
     for(let i=0; i<this.size; i++){
       for(let j=0; j<this.size; j++){
         let index = i * this.size + j;
+
+        // this.positions[index * 4 ] = randomPosition.x - 0.5;
+        // this.positions[index * 4 + 1] = randomPosition.y -0.5;
+ 
         this.positions[index * 4 ] = i/(this.size-1) - 0.5;
         this.positions[index * 4 + 1] = j/(this.size-1) -0.5;
         this.positions[index * 4 + 2] = 0;
         this.positions[index * 4 + 3] = 1;
       }
     }
+    // console.log(this.positions)
     this.positionTexture = new THREE.DataTexture(this.positions,this.size, this.size, THREE.RGBAFormat, THREE.FloatType);
     this.positionTexture.needsUpdate = true;
 
@@ -89,8 +189,11 @@ export default class Sketch{
     this.matFBO = new THREE.ShaderMaterial({
       uniforms: {
         uMousePos: {value: this.uMousePos},
-        uPosTexture: {value: this.positionTexture},
-        uOriginPosTexture: {value: this.positionTexture}
+        timeControl: {value: this.uiObject.timeControl},
+
+        uPosTexture: {value: this.texture_three},
+        uOriginPosTexture: {value: this.texture_three},
+        uOriginPosTexture2: {value: this.texture_super}
       },
       vertexShader:fboVertex,
       fragmentShader:fboFragment, 
@@ -99,6 +202,9 @@ export default class Sketch{
     // this.meshFBO.position.x = 0.5;
     this.sceneFBO.add(this.meshFBO);
 
+    gui.add(this.uiObject, 'timeControl', 0, 1).onChange((value)=>{
+      this.matFBO.uniforms.timeControl.value = value;
+    })
     //the output image format
     /*
        * .magFilter : number (THREE.LinearFilter or THREE.NearestFilter)
@@ -159,10 +265,14 @@ export default class Sketch{
     this.material = new THREE.ShaderMaterial({
         uniforms: {
             time: {value: this.time},
-            uTexture: this.positionTexture
+            uTexture: {value: this.positionTexture},
+            colorTexture: {value: new THREE.TextureLoader().load(logoImgPath)}
         },
         vertexShader: vertexShader,
         fragmentShader: fragmentShader,
+        depthTest: false,
+        depthWrite: false,
+        transparent: true
     })
     this.mesh = new THREE.Points(this.geometry, this.material);
     this.scene.add(this.mesh);

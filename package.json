@@ -16,6 +16,7 @@
   "dependencies": {
     "esbuild": "^0.19.12",
     "fsevents": "^2.3.3",
+    "lil-gui": "^0.19.2",
     "nanoid": "^3.3.7",
     "picocolors": "^1.0.0",
     "postcss": "^8.4.35",
