@@ -7,8 +7,8 @@ import fragmentShader from './shaders/fragment.glsl';
 import fboVertex from './shaders/fboVertex.glsl';
 import fboFragment from './shaders/fboFragment.glsl';
 
-import logoImgPath from '/gpgpu-morphing-graph/logo.png';
-import superImgPath from '/gpgpu-morphing-graph/super.png';
+import logoImgPath from '/logo.png';
+import superImgPath from '/super.png';
 
 import GUI from 'lil-gui'; 
 
